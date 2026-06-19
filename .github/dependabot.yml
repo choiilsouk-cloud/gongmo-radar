@@ -1,0 +1,20 @@
+# .github/dependabot.yml
+# GitHub Actions 의존성 자동 업데이트 + SHA 핀 관리
+# Dependabot이 주 1회 actions 버전을 확인하고 PR을 열어 줌.
+# 각 PR은 SHA 핀 포함 → 공급망 공격(supply-chain attack) 방어.
+
+version: 2
+updates:
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "09:00"
+      timezone: "Asia/Seoul"
+    open-pull-requests-limit: 5
+    labels:
+      - "dependencies"
+      - "github-actions"
+    commit-message:
+      prefix: "ci(deps)"

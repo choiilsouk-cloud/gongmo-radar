@@ -82,7 +82,8 @@ BLUE     = "#2563EB"    # 정보
 BLUE_LT  = "#DBEAFE"    # 정보 배경
 GRAY     = "#64748B"    # 중성
 
-CUSTOM_SOURCES_FILE = os.path.join(APP_DIR, "custom_sources.json")
+CUSTOM_SOURCES_FILE  = os.path.join(APP_DIR, "custom_sources.json")
+WINDOW_STATE_FILE    = os.path.join(APP_DIR, "window_state.json")
 
 
 # ════════════════════════════════════════════════════════════════
@@ -342,7 +343,6 @@ class GongmoRadarApp:
     def __init__(self, root: tk.Tk):
         self.root = root
         self.root.title("공모레이더 v2.0 - 한서대학교 성과혁신IR센터")
-        self.root.geometry("1280x820")
         self.root.minsize(1000, 650)
         self.root.configure(bg=BG)
 
@@ -360,9 +360,49 @@ class GongmoRadarApp:
         self._build_ui()
         self._load_custom_sources()
         self._check_ollama_status()
+        self._restore_window_state()   # ← 저장된 창 크기·위치 복원
+
+        # 종료 시 창 상태 저장
+        self.root.protocol("WM_DELETE_WINDOW", self._on_close)
 
         # 주기적 큐 처리
         self.root.after(200, self._process_queue)
+
+    # ────────────────────────────────────────────────────────────
+    # 창 상태 저장/복원
+    # ────────────────────────────────────────────────────────────
+    def _restore_window_state(self):
+        """저장된 window_state.json에서 창 크기·위치를 복원한다."""
+        try:
+            if os.path.exists(WINDOW_STATE_FILE):
+                state = json.loads(open(WINDOW_STATE_FILE, encoding="utf-8").read())
+                geo = state.get("geometry", "")
+                # 저장된 geometry가 화면 범위 안에 있는지 확인
+                if geo:
+                    self.root.geometry(geo)
+                    return
+        except Exception:
+            pass
+        # 기본값: 1280×820, 화면 중앙
+        self.root.geometry("1280x820")
+        self.root.update_idletasks()
+        w, h = self.root.winfo_width(), self.root.winfo_height()
+        sw, sh = self.root.winfo_screenwidth(), self.root.winfo_screenheight()
+        self.root.geometry(f"{w}x{h}+{(sw-w)//2}+{(sh-h)//2}")
+
+    def _save_window_state(self):
+        """현재 창 크기·위치를 window_state.json에 저장한다."""
+        try:
+            state = {"geometry": self.root.geometry()}
+            with open(WINDOW_STATE_FILE, "w", encoding="utf-8") as f:
+                json.dump(state, f, ensure_ascii=False)
+        except Exception as e:
+            logger.debug("창 상태 저장 실패: %s", e)
+
+    def _on_close(self):
+        """종료 시 창 상태 저장 후 닫기."""
+        self._save_window_state()
+        self.root.destroy()
 
     # ────────────────────────────────────────────────────────────
     # 스타일 설정
@@ -1319,14 +1359,7 @@ def main():
         pass
 
     app = GongmoRadarApp(root)
-
-    # 창 중앙 배치
-    root.update_idletasks()
-    w = root.winfo_width()
-    h = root.winfo_height()
-    sw = root.winfo_screenwidth()
-    sh = root.winfo_screenheight()
-    root.geometry(f"{w}x{h}+{(sw-w)//2}+{(sh-h)//2}")
+    # 창 위치/크기는 _restore_window_state()가 처리
 
     # ── 백그라운드 업데이트 체크 (앱 시작 30초 후, 비차단) ─────────
     def _bg_update():

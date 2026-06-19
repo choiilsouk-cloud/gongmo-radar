@@ -14,6 +14,7 @@ GitHub Releases 기반 자동 업데이트 모듈
   → 직원 PC 다음 실행 시 자동 업데이트
 """
 
+import hashlib
 import logging
 import os
 import shutil
@@ -36,6 +37,10 @@ VERSION_URL   = (
 RELEASE_URL   = (
     f"https://github.com/{GITHUB_OWNER}/{GITHUB_REPO}"
     f"/releases/latest/download/{EXE_NAME}"
+)
+SHA256_URL    = (
+    f"https://github.com/{GITHUB_OWNER}/{GITHUB_REPO}"
+    f"/releases/latest/download/{EXE_NAME}.sha256"
 )
 
 # exe 실행 위치 기준 (PyInstaller frozen 여부 무관)
@@ -74,9 +79,29 @@ def _is_newer(remote: str, local: str) -> bool:
 
 
 # ── 다운로드 ─────────────────────────────────────────────────
+def _fetch_remote_sha256(timeout: int = 10) -> str | None:
+    """GitHub Release의 .sha256 파일에서 체크섬 문자열 반환."""
+    try:
+        with urllib.request.urlopen(SHA256_URL, timeout=timeout) as r:
+            # 형식: "abc123...  GongmoRadar.exe"
+            return r.read().decode("utf-8").strip().split()[0].lower()
+    except Exception as e:
+        logger.debug("[updater] SHA256 파일 가져오기 실패: %s", e)
+        return None
+
+
+def _sha256_of_file(path: Path) -> str:
+    """파일의 SHA256 16진수 문자열 반환."""
+    h = hashlib.sha256()
+    with open(path, "rb") as f:
+        for chunk in iter(lambda: f.read(65536), b""):
+            h.update(chunk)
+    return h.hexdigest().lower()
+
+
 def _download_new_exe(progress_cb=None) -> bool:
     """
-    GitHub Release에서 GongmoRadar.exe 다운로드 → GongmoRadar.exe.new 저장.
+    GitHub Release에서 GongmoRadar.exe 다운로드 → SHA256 검증 → .new 저장.
     progress_cb(int): 0~100 진행률 콜백 (선택)
     """
     tmp = NEW_EXE.with_suffix(".tmp")
@@ -88,6 +113,22 @@ def _download_new_exe(progress_cb=None) -> bool:
 
         logger.info("[updater] 다운로드 시작: %s", RELEASE_URL)
         urllib.request.urlretrieve(RELEASE_URL, tmp, reporthook=_hook)
+
+        # ── SHA256 무결성 검증 ──────────────────────────────────
+        expected = _fetch_remote_sha256()
+        if expected:
+            actual = _sha256_of_file(tmp)
+            if actual != expected:
+                logger.error(
+                    "[updater] SHA256 불일치! 파일 손상 또는 위변조 의심.\n"
+                    "  expected: %s\n  actual:   %s", expected, actual
+                )
+                tmp.unlink(missing_ok=True)
+                return False
+            logger.info("[updater] SHA256 검증 통과: %s", actual[:16] + "...")
+        else:
+            logger.warning("[updater] SHA256 파일 없음 — 검증 건너뜀 (구버전 릴리즈?)")
+
         shutil.move(str(tmp), str(NEW_EXE))
         logger.info("[updater] 다운로드 완료 → %s", NEW_EXE.name)
         return True

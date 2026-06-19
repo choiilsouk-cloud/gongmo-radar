@@ -39,3 +39,11 @@ logs/
 version.txt.new
 _gongmo_update.bat
 
+
+# 시스템 생성 디렉토리
+NVIDIA Corporation/
+umdlogs/
+
+# 평가 보고서 (내부 참고용, 배포 불필요)
+*평가*.md
+*가이드라인*.md

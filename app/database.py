@@ -20,8 +20,13 @@ class Database:
         self._init_tables()
 
     def _conn(self) -> sqlite3.Connection:
-        conn = sqlite3.connect(self.db_path)
+        conn = sqlite3.connect(self.db_path, timeout=30)
         conn.row_factory = sqlite3.Row
+        # WAL 모드: 동시 읽기/쓰기 충돌 방지 (여러 수집기 병렬 실행 시 필수)
+        conn.execute("PRAGMA journal_mode=WAL")
+        conn.execute("PRAGMA synchronous=NORMAL")   # WAL 환경에서 안전 + 빠름
+        conn.execute("PRAGMA foreign_keys=ON")
+        conn.execute("PRAGMA cache_size=-8000")     # 8MB 캐시
         return conn
 
     def _init_tables(self):
@@ -136,12 +141,32 @@ class Database:
                 return None  # 중복 공고
 
     def _make_dup_key(self, notice: dict) -> str:
-        raw = (
-            (notice.get("title", "") or "")[:50]
-            + (notice.get("agency", "") or "")
-            + (notice.get("end_date", "") or "")
-        )
-        return hashlib.md5(raw.encode()).hexdigest()
+        """
+        중복 판별 키 생성 — 3단계 폴백 전략:
+        1순위: URL (공고번호 포함, 가장 정확)
+        2순위: 제목(전체) + 기관 + 마감일
+        3순위: 제목 앞 80자 + 기관 (최후 수단)
+        """
+        import re as _re
+
+        url = (notice.get("url") or "").strip()
+        title = _re.sub(r"\s+", "", (notice.get("title") or "")).lower()
+        agency = (notice.get("agency") or "").strip()
+        end_date = (notice.get("end_date") or "").strip()
+        source = (notice.get("source") or "").strip()
+
+        if url:
+            # URL에서 쿼리스트링 파라미터 순서 무관하도록 정렬
+            base = url.split("?")[0]
+            params = sorted(url.split("?")[1].split("&")) if "?" in url else []
+            canonical = base + ("?" + "&".join(params) if params else "")
+            raw = f"url:{canonical}"
+        elif title and agency:
+            raw = f"ta:{title}|{agency}|{end_date}"
+        else:
+            raw = f"fb:{source}:{title[:80]}|{agency}"
+
+        return hashlib.md5(raw.encode("utf-8")).hexdigest()
 
     # ── 알림 대상 조회 ─────────────────────────────────────────
     def get_pending_notices_for_dept(

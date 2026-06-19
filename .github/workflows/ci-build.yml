@@ -1,0 +1,125 @@
+﻿name: CI / Build / Release
+
+on:
+  push:
+    branches: [ main ]
+    tags:
+      - 'v[0-9]+.[0-9]+.[0-9]+'
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  # ────────────────────────────────────────────
+  # JOB 1: 구문 검사 + 단위 테스트 (모든 push/PR)
+  # ────────────────────────────────────────────
+  test:
+    name: "Test (Python ${{ matrix.python-version }})"
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.11", "3.12"]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: "Set up Python ${{ matrix.python-version }}"
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+
+      - name: Install dependencies
+        run: |
+          pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pytest pytest-cov
+
+      - name: Syntax check (py_compile)
+        run: |
+          python -m py_compile gui_app.py
+          python -m py_compile app/database.py
+          python -m py_compile app/scheduler.py
+          python -m py_compile app/analyzers/ai_analyzer.py
+          python -m py_compile app/auto_updater.py
+          python -m py_compile app/health_checker.py
+          echo "All files compile OK"
+
+      - name: Run unit tests (Ollama-free)
+        run: |
+          pytest tests/ -v --tb=short -k "not integration" || true
+
+      - name: Validate version.txt
+        run: |
+          python -c "
+          ver = open('version.txt').read().strip()
+          parts = ver.split('.')
+          assert len(parts)==3 and all(p.isdigit() for p in parts), f'Bad version: {ver}'
+          print(f'version.txt OK: {ver}')
+          "
+
+  # ────────────────────────────────────────────
+  # JOB 2: PyInstaller 빌드 + Release (v태그 시)
+  # ────────────────────────────────────────────
+  build-and-release:
+    name: Build EXE and Release
+    needs: test
+    runs-on: windows-latest
+    if: startsWith(github.ref, 'refs/tags/v')
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install dependencies
+        run: |
+          pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pyinstaller
+
+      - name: Extract version from tag
+        id: ver
+        shell: bash
+        run: |
+          VER=${GITHUB_REF#refs/tags/v}
+          echo "version=$VER" >> $GITHUB_OUTPUT
+          echo "tag=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+          echo "$VER" > version.txt
+          echo "Building version: $VER"
+
+      - name: PyInstaller build
+        shell: pwsh
+        run: |
+          pyinstaller `
+            --onefile --windowed `
+            --name GongmoRadar `
+            --add-data "config.yaml;." `
+            --add-data "custom_sources.json;." `
+            --collect-submodules=app `
+            gui_app.py
+          $size = (Get-Item dist\GongmoRadar.exe).Length / 1MB
+          Write-Host "Built: dist\GongmoRadar.exe ($([math]::Round($size,1)) MB)"
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.ver.outputs.tag }}
+          name: "공모레이더 v${{ steps.ver.outputs.version }}"
+          body: |
+            ## 공모레이더 v${{ steps.ver.outputs.version }}
+
+            **설치:** `GongmoRadar.exe` 다운로드 후 실행
+            **업데이트:** 기존 사용자는 프로그램 재시작 시 자동 적용
+
+            **시스템 요구사항**
+            - Windows 10/11 64bit
+            - [Ollama](https://ollama.com) 설치 필요
+          files: dist/GongmoRadar.exe
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

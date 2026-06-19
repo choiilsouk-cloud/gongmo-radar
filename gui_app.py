@@ -1,4 +1,4 @@
-﻿# -*- coding: utf-8 -*-
+# -*- coding: utf-8 -*-
 """
 공모레이더 GUI - 한서대학교 성과혁신IR센터
 ============================================================
@@ -792,6 +792,10 @@ class GongmoRadarApp:
         threading.Thread(target=_worker, daemon=True).start()
 
     def _hc_log(self, msg: str):
+        """헬스체크 탭 로그 추가 (thread-safe)."""
+        if threading.current_thread() is not threading.main_thread():
+            self.root.after(0, lambda m=msg: self._hc_log(m))
+            return
         """헬스체크 상세 로그 추가."""
         self.hc_detail_text.config(state="normal")
         ts = datetime.now().strftime("%H:%M:%S")
@@ -1279,6 +1283,10 @@ class GongmoRadarApp:
         self.root.after(30000, self._check_ollama_status)  # 30초마다 재확인
 
     def _log(self, msg: str):
+        """로그 콘솔에 메시지 추가 (thread-safe)."""
+        if threading.current_thread() is not threading.main_thread():
+            self.root.after(0, lambda m=msg: self._log(m))
+            return
         timestamp = datetime.now().strftime("%H:%M:%S")
         self.log_text.config(state="normal")
         self.log_text.insert(END, f"[{timestamp}] {msg}\n")

@@ -1,4 +1,4 @@
-# -*- coding: utf-8 -*-
+﻿# -*- coding: utf-8 -*-
 """
 공모레이더 GUI - 한서대학교 성과혁신IR센터
 ============================================================
@@ -1163,6 +1163,13 @@ class GongmoRadarApp:
 # 진입점
 # ════════════════════════════════════════════════════════════════
 def main():
+    # ── 자동 업데이트: 이전 다운로드 있으면 교체 후 재시작 ──────────────
+    try:
+        from app.auto_updater import apply_pending_if_exists
+        apply_pending_if_exists()   # GongmoRadar_new.exe 있으면 → bat 교체 → sys.exit()
+    except Exception:
+        pass
+
     root = tk.Tk()
 
     # DPI 인식 (Windows 고해상도)
@@ -1182,8 +1189,26 @@ def main():
     sh = root.winfo_screenheight()
     root.geometry(f"{w}x{h}+{(sw-w)//2}+{(sh-h)//2}")
 
+    # ── 백그라운드 업데이트 체크 (앱 시작 30초 후, 비차단) ─────────
+    def _bg_update():
+        time.sleep(30)   # 앱 완전 로딩 후 실행
+        try:
+            from app.auto_updater import background_check
+            def _notify(msg):
+                try:
+                    if hasattr(app, "_log"):
+                        app._log(f"[업데이트] {msg}")
+                except Exception:
+                    pass
+            background_check(notify_cb=_notify)
+        except Exception:
+            pass
+
+    threading.Thread(target=_bg_update, daemon=True).start()
+
     root.mainloop()
 
 
 if __name__ == "__main__":
     main()
+

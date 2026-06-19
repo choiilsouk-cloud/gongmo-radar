@@ -33,3 +33,9 @@ logs/
 .vscode/
 .idea/
 *.swp
+
+# 자동 업데이트 임시 파일
+*.new
+version.txt.new
+_gongmo_update.bat
+

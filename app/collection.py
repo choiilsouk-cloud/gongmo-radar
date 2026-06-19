@@ -14,6 +14,9 @@ from app.collectors.ministry_collector import MinistryCollector
 from app.collectors.custom_collector import CustomCollector, CUSTOM_SOURCES_FILE
 from app.collectors.ntis_collector import NtisCollector
 from app.collectors.kstartup_collector import KstartupCollector
+from app.collectors.bojo_collector import BojoCollector
+from app.collectors.mss_collector import MssCollector
+from app.collectors.korea_collector import KoreaGovCollector
 from app.git_sync import git_push
 from app.health_checker import HealthChecker
 from app.notifier.telegram import TelegramNotifier
@@ -188,6 +191,13 @@ def run_collection(config, db, analyzer):
     # K-Startup: api_key 없으면 k-skill-proxy 경유, 있으면 공공데이터포털 직접 호출
     if sources.get("kstartup", True):
         safe_collect("KStartup", lambda: KstartupCollector(api_key=config.get("kstartup_api_key", "")).collect(days_back))
+    # ── 신규 수집기 (2026 추가) ─────────────────────────────────
+    if sources.get("bojo_portal", True):
+        safe_collect("보조금포털", lambda: BojoCollector().collect())
+    if sources.get("mss", True):
+        safe_collect("중소벤처기업부", lambda: MssCollector().collect())
+    if sources.get("korea_gov", True):
+        safe_collect("정부공모알리미", lambda: KoreaGovCollector().collect())
 
     # ── 수집 결과 요약 및 이상 감지 (C8) ──────────────────────────
     total = len(all_notices)

@@ -20,10 +20,14 @@ logger = logging.getLogger(__name__)
 class AIAnalyzer:
     """Ollama 기반 공고 분석기 (무료)"""
 
+    # 모델 폴백 순서: config 우선, 없으면 EXAONE → Qwen 순
+    _FALLBACK_MODELS = ["exaone3.5:7.8b", "qwen2.5:7b", "llama3.2:3b"]
+
     def __init__(self, config: dict):
-        self.base_url = config["ai"]["base_url"]
-        self.model    = config["ai"]["model"]
-        self.timeout  = config["ai"].get("timeout", 120)
+        self.base_url    = config["ai"]["base_url"]
+        self.model       = config["ai"]["model"]
+        self.timeout     = config["ai"].get("timeout", 120)
+        self._retry_max  = config["ai"].get("retry", 2)   # 재시도 횟수 (기본 2)
 
     # 핵심 분석: 공고 텍스트 → 구조화된 분석 결과 반환 ─────────────────────────────
     def analyze(self, notice_text: str) -> dict:
@@ -32,30 +36,46 @@ class AIAnalyzer:
         """
         prompt = self._build_prompt(notice_text)
 
-        try:
-            response = requests.post(
-                f"{self.base_url}/api/generate",
-                json={
-                    "model": self.model,
-                    "prompt": prompt,
-                    "stream": False,
-                    "options": {
-                        "temperature": 0.1,    # 일관성 중요 → 낮게 유지
-                        "num_predict": 2048,   # 복잡한 공고 JSON 잘림 방지 (이전: 1024)
-                    }
-                },
-                timeout=self.timeout
-            )
-            response.raise_for_status()
-            raw = response.json().get("response", "")
-            return self._parse_response(raw)
+        for attempt in range(1, self._retry_max + 1):
+            try:
+                response = requests.post(
+                    f"{self.base_url}/api/generate",
+                    json={
+                        "model": self.model,
+                        "prompt": prompt,
+                        "stream": False,
+                        "options": {
+                            "temperature": 0.1,    # 일관성 중요 → 낮게 유지
+                            "num_predict": 2048,   # 복잡한 공고 JSON 잘림 방지
+                        }
+                    },
+                    timeout=self.timeout
+                )
+                response.raise_for_status()
+                raw = response.json().get("response", "")
+                return self._parse_response(raw)
 
-        except requests.exceptions.ConnectionError:
-            logger.error("Ollama 연결 실패. 'ollama serve' 실행 여부 확인 필요")
-            return self._fallback_result()
-        except Exception as e:
-            logger.error(f"AI 분석 오류: {e}")
-            return self._fallback_result()
+            except requests.exceptions.ConnectionError:
+                logger.error("Ollama 연결 실패. 'ollama serve' 실행 여부 확인 필요")
+                return self._fallback_result()
+            except requests.exceptions.Timeout:
+                logger.warning(
+                    "Ollama 응답 초과 (%ds, 시도 %d/%d) — timeout 설정: ai.timeout",
+                    self.timeout, attempt, self._retry_max,
+                )
+                if attempt < self._retry_max:
+                    import time
+                    time.sleep(3)
+                    continue
+                return self._fallback_result()
+            except Exception as e:
+                logger.error("AI 분석 오류 (시도 %d/%d): %s", attempt, self._retry_max, e)
+                if attempt < self._retry_max:
+                    import time
+                    time.sleep(2)
+                    continue
+                return self._fallback_result()
+        return self._fallback_result()
 
     # 분석 프롬프트 구성 ────────────────────────────────────────────────────────────
     def _build_prompt(self, text: str) -> str:
@@ -180,15 +200,24 @@ class AIAnalyzer:
         try:
             r = requests.get(f"{self.base_url}/api/tags", timeout=5)
             models = [m["name"] for m in r.json().get("models", [])]
-            if not any(self.model.split(":")[0] in m for m in models):
-                logger.warning(
-                    f"모델 '{self.model}' 미설치. "
-                    f"실행: ollama pull {self.model}"
-                )
-                return False
-            return True
-        except Exception:
-            logger.error(
-                "Ollama 미실행. 터미널에서 'ollama serve' 실행 필요"
+            model_base = self.model.split(":")[0]
+            if any(model_base in m for m in models):
+                return True
+            # 폴백: 설치된 다른 모델 자동 선택
+            for fb in self._FALLBACK_MODELS:
+                fb_base = fb.split(":")[0]
+                if any(fb_base in m for m in models):
+                    logger.warning(
+                        "모델 '%s' 미설치. 설치된 '%s'(으)로 폴백합니다. "
+                        "ollama pull %s 로 원래 모델 설치 권장",
+                        self.model, fb, self.model,
+                    )
+                    self.model = fb
+                    return True
+            logger.warning(
+                "모델 '%s' 미설치. 실행: ollama pull %s", self.model, self.model
             )
+            return False
+        except Exception:
+            logger.error("Ollama 미실행. 터미널에서 'ollama serve' 실행 필요")
             return False

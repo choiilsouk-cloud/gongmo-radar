@@ -24,9 +24,11 @@ class Database:
         conn.row_factory = sqlite3.Row
         # WAL 모드: 동시 읽기/쓰기 충돌 방지 (여러 수집기 병렬 실행 시 필수)
         conn.execute("PRAGMA journal_mode=WAL")
-        conn.execute("PRAGMA synchronous=NORMAL")   # WAL 환경에서 안전 + 빠름
+        conn.execute("PRAGMA synchronous=NORMAL")    # WAL 환경에서 안전 + 빠름
         conn.execute("PRAGMA foreign_keys=ON")
-        conn.execute("PRAGMA cache_size=-8000")     # 8MB 캐시
+        conn.execute("PRAGMA cache_size=-8000")      # 8MB 캐시
+        conn.execute("PRAGMA busy_timeout=5000")     # 5초 대기 후 OperationalError (잠금 충돌 방지)
+        conn.execute("PRAGMA temp_store=MEMORY")     # 임시 데이터 메모리 처리 (디스크 흔적 최소화)
         return conn
 
     def _init_tables(self):

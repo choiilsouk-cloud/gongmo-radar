@@ -8,6 +8,10 @@ on:
   pull_request:
     branches: [ main ]
 
+# 최소 권한 원칙 — 각 job에서 필요 시 재정의
+permissions:
+  contents: read
+
 jobs:
   # ────────────────────────────────────────────
   # JOB 1: 구문 검사 + 단위 테스트 (모든 push/PR)
@@ -46,7 +50,7 @@ jobs:
 
       - name: Run unit tests (Ollama-free)
         run: |
-          pytest tests/ -v --tb=short -k "not integration" || true
+          pytest tests/ -v --tb=short -k "not integration"
 
       - name: Validate version.txt
         run: |
@@ -65,6 +69,8 @@ jobs:
     needs: test
     runs-on: windows-latest
     if: startsWith(github.ref, 'refs/tags/v')
+    permissions:
+      contents: write  # Release 업로드에 필요
 
     steps:
       - uses: actions/checkout@v4
@@ -90,6 +96,14 @@ jobs:
           echo "tag=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
           echo "$VER" > version.txt
           echo "Building version: $VER"
+
+      - name: Ensure default custom_sources.json exists
+        shell: pwsh
+        run: |
+          if (-not (Test-Path "custom_sources.json")) {
+            '[]' | Out-File -FilePath "custom_sources.json" -Encoding utf8
+            Write-Host "Created empty custom_sources.json"
+          }
 
       - name: PyInstaller build
         shell: pwsh

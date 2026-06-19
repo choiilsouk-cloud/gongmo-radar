@@ -5,16 +5,29 @@ scheduler.py - v2.0
 """
 import logging, os, subprocess, sys, time, urllib.request
 from datetime import datetime, date
+from logging.handlers import RotatingFileHandler
 import schedule, yaml
 
 from app.analyzers.ai_analyzer import AIAnalyzer
 from app.database import Database
 from app.collection import run_collection
+from app.git_sync import git_push
+from app.notifier.email_notifier import EmailNotifier
+from app.notifier.telegram import TelegramNotifier
 
-logging.basicConfig(level=logging.INFO,
+logging.basicConfig(
+    level=logging.INFO,
     format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
-    handlers=[logging.StreamHandler(),
-              logging.FileHandler("./data/gongmo.log", encoding="utf-8")])
+    handlers=[
+        logging.StreamHandler(),
+        RotatingFileHandler(
+            "./data/gongmo.log",
+            maxBytes=5 * 1024 * 1024,   # 5MB
+            backupCount=5,               # gongmo.log.1 ~ .5 보존
+            encoding="utf-8",
+        ),
+    ],
+)
 logger = logging.getLogger(__name__)
 
 

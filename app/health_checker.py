@@ -17,6 +17,7 @@ import logging
 import time
 import urllib.request
 import urllib.error
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Dict, List
 
 logger = logging.getLogger(__name__)
@@ -63,6 +64,22 @@ SOURCE_CHECKS: Dict[str, tuple] = {
         "https://www.ntis.go.kr",
         ["ntis", "국가과학기술", "R&D"],
         10,
+    ),
+    # 2026 신규 추가
+    "BojoPortal": (
+        "https://www.bojo.go.kr/hg/hg002/retrieveTaskReqstList.do",
+        ["보조금", "지원사업", "공모"],
+        12,
+    ),
+    "MSS": (
+        "https://www.mss.go.kr/site/smba/ex/bbs/List.do?cbIdx=310",
+        ["사업공고", "중소", "벤처", "창업"],
+        12,
+    ),
+    "KoreaGov": (
+        "https://www.korea.kr/special/govGongmoList.do",
+        ["공모", "정부", "지원사업"],
+        12,
     ),
 }
 
@@ -155,15 +172,27 @@ class HealthChecker:
 
     def run_all(self, active_sources: List[str] = None) -> List[dict]:
         """
-        모든(또는 지정) 수집기 헬스체크.
+        모든(또는 지정) 수집기 헬스체크 — 병렬 실행 (ThreadPoolExecutor).
+        순차 실행 시 최대 80초(8개 × 10s) → 병렬 시 단일 timeout 수준으로 단축.
         active_sources: None -> SOURCE_CHECKS 전부
         """
         targets = active_sources if active_sources else list(SOURCE_CHECKS.keys())
-        results = []
-        for src in targets:
-            r = self.check(src)
-            results.append(r)
-        return results
+        results_map: dict = {}
+
+        with ThreadPoolExecutor(max_workers=len(targets)) as executor:
+            future_to_src = {executor.submit(self.check, src): src for src in targets}
+            for future in as_completed(future_to_src):
+                src = future_to_src[future]
+                try:
+                    results_map[src] = future.result()
+                except Exception as e:
+                    results_map[src] = {
+                        "source": src, "status": DOWN,
+                        "latency_ms": 0, "detail": f"Executor error: {e}",
+                    }
+
+        # 원래 순서 보존
+        return [results_map[src] for src in targets if src in results_map]
 
     def run_active_from_config(self, sources_cfg: dict) -> List[dict]:
         """
@@ -180,6 +209,10 @@ class HealthChecker:
             "ministry": "Ministry",
             "kstartup": "KStartup",
             "ntis": "NTIS",
+            # 2026 신규
+            "bojo_portal": "BojoPortal",
+            "mss":         "MSS",
+            "korea_gov":   "KoreaGov",
         }
         active = [
             name

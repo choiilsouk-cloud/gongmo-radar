@@ -154,5 +154,5 @@ filter:
 # ── GitHub 자동 동기화 ─────────────────────────────────────────
 # git remote add origin <your-repo-url> 후 활성화됩니다.
 github:
-  auto_push_after_collect: true  # 수집 완료 후 즉시 push
-  nightly_push: true             # 새벽 정기 push (git_push_time 기준)
+  auto_push_after_collect: false  # ⚠️ 기본 비활성화 — 사설 저장소에서만 true로 변경
+  nightly_push: false             # ⚠️ 기본 비활성화 — 수집 결과 공개 저장소 유출 방지

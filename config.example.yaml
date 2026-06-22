@@ -1,0 +1,129 @@
+# ================================================================
+# 공모레이더 설정 예시 파일 (config.example.yaml)
+# ================================================================
+# 사용 방법:
+#   1. 이 파일을 복사하여 config.yaml 로 저장한다.
+#   2. config.yaml 은 git 추적 대상이 아니므로 자유롭게 편집한다.
+#   3. API 키, 이메일 비밀번호, 텔레그램 토큰은 절대 커밋하지 않는다.
+# ================================================================
+
+# ── AI 분석 설정 ─────────────────────────────────────────────────
+ai:
+  provider: ollama                 # 완전 무료 로컬 LLM (외부 API 불필요)
+  base_url: http://localhost:11434
+  model: exaone3.5:7.8b            # 권장: ollama pull exaone3.5:7.8b
+  # RAM 8GB 이하 환경 대체 모델:
+  # model: qwen2.5:7b
+  timeout: 120                     # Ollama 응답 제한 (초)
+  retry: 2                         # 실패 시 재시도 횟수
+
+# ── 데이터베이스 ──────────────────────────────────────────────────
+database:
+  path: ./data/gongmo.db           # SQLite DB 경로 (자동 생성)
+
+# ── 스케줄 설정 ───────────────────────────────────────────────────
+schedule:
+  collect_time: "06:00"            # 매일 수집 실행 시각
+  notify_time:  "08:30"            # 매일 알림 발송 시각
+
+# ── 수집처 설정 ───────────────────────────────────────────────────
+sources:
+  days_back: 7                     # 수집 기간 (최근 N일)
+
+  # 기본 수집처 (true = 활성화)
+  iris:         true               # 범부처 R&D 통합포털
+  nrf:          true               # 한국연구재단
+  ntis:         false              # NTIS (API 키 필요 시 활성화)
+  g2b:          true               # 나라장터
+  ministry:     true               # 중앙행정기관 21개처
+  bojo:         true               # e나라도움 (보조금)
+  bizinfo:      true               # 기업마당 (중소기업)
+  kstartup:     true               # K-Startup (창업)
+  extra_agencies: true             # 지자체 (충남도청·서산시·교육청)
+  bojo_portal:  true               # 보조금통합포털 (bojo.go.kr)
+  mss:          true               # 중소벤처기업부 (mss.go.kr)
+  korea_gov:    true               # 정부공모사업알리미 (korea.kr)
+
+  # 공공데이터포털 API 키 (선택 — NTIS 활성화 시 필요)
+  # data_go_kr_api_key: "여기에_발급받은_API_키_입력"
+
+# ── 부서 정의 ─────────────────────────────────────────────────────
+departments:
+  - name: 기획예산처
+    keywords: [기획, 평가인증, 재정지원, 성과관리, 예산확보, 교육발전특구, 기관평가, IR]
+    contacts:
+      - name: 담당자명
+        email: example@hanseo.ac.kr
+        telegram_chat_id: ""        # 텔레그램 알림 chat_id (선택)
+
+  - name: 성과혁신IR센터
+    keywords: [IR, 성과관리, 교육발전특구, 기관평가, 성과지표, 서산교육발전특구]
+    contacts:
+      - name: 담당자명
+        email: example@hanseo.ac.kr
+        telegram_chat_id: ""
+
+  - name: 산학협력단
+    keywords: [R&D, 산학협력, 산학협동, 공동연구, 기술개발, 연구비, 산학, 연구과제]
+    contacts:
+      - name: 담당자명
+        email: example@hanseo.ac.kr
+        telegram_chat_id: ""
+
+  - name: 창업지원단
+    keywords: [창업, 기술창업, 스타트업, 창업지원, 창업교육, 창업보육, K-Startup]
+    contacts:
+      - name: 담당자명
+        email: example@hanseo.ac.kr
+        telegram_chat_id: ""
+
+  - name: 항공학부
+    keywords: [항공, 드론, 모빌리티, UAM, 무인기, 비행, 항공안전, 항공교육]
+    contacts:
+      - name: 담당자명
+        email: example@hanseo.ac.kr
+        telegram_chat_id: ""
+
+  - name: AI·SW 관련 학과
+    keywords: [AI, SW, 소프트웨어, 인공지능, 디지털, 데이터, 빅데이터]
+    contacts:
+      - name: 담당자명
+        email: example@hanseo.ac.kr
+        telegram_chat_id: ""
+
+# ── 이메일 알림 설정 ──────────────────────────────────────────────
+email:
+  enabled: false                   # true 로 바꾸면 이메일 알림 활성화
+  smtp_server: smtp.gmail.com
+  smtp_port: 587
+  use_tls: true
+  sender_email: ""                 # 발신 이메일 주소 입력
+  sender_password: ""              # Gmail 앱 비밀번호 입력 (2단계 인증 필요)
+  sender_name: "[공모레이더] 한서대학교"
+
+# ── 텔레그램 알림 설정 (선택 권장) ───────────────────────────────
+# 설정 절차:
+#   1. 텔레그램에서 @BotFather → /newbot 으로 봇 생성
+#   2. 발급된 API 토큰을 bot_token 에 입력
+#   3. 봇에 메시지 1개 전송
+#   4. https://api.telegram.org/bot{토큰}/getUpdates 에서 chat_id 확인
+#   5. 각 부서 contacts 의 telegram_chat_id 에 입력
+telegram:
+  enabled: false                   # true 로 바꾸면 텔레그램 알림 활성화
+  bot_token: ""                    # @BotFather 에서 발급받은 토큰 입력
+
+# ── 알림 필터 설정 ────────────────────────────────────────────────
+filter:
+  min_eligibility_score: 60        # AI 신청가능성 점수 이상만 알림
+  notify_days_before_deadline: 30  # 마감 D-30 이내 공고만 알림
+  exclude_keywords:                # 이 키워드 포함 공고는 자동 제외
+    - 기업전용
+    - 개인사업자
+    - 영리단체전용
+
+# ── GitHub 자동 동기화 ────────────────────────────────────────────
+# ⚠️  공개 저장소 사용 시 수집 결과가 외부에 노출될 수 있습니다.
+#     기본값은 false 이며, 사적 저장소에서만 true 로 활성화하세요.
+github:
+  auto_push_after_collect: false   # 수집 완료 후 자동 push (기본: 비활성화)
+  nightly_push: false              # 새벽 정기 push (기본: 비활성화)

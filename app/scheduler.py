@@ -15,6 +15,9 @@ from app.git_sync import git_push
 from app.notifier.email_notifier import EmailNotifier
 from app.notifier.telegram import TelegramNotifier
 
+# ── 로그 폴더 보장: RotatingFileHandler 열기 전에 반드시 먼저 생성 ──
+os.makedirs("./data", exist_ok=True)
+
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",

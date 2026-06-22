@@ -29,6 +29,12 @@ logs/
 .env
 .env.*
 
+# ── 운영 설정 (API 키·이메일·텔레그램 토큰 포함) ──────────────
+# config.example.yaml 만 공개 저장소에 올린다.
+# 실제 운영 파일은 로컬에서만 관리한다.
+config.yaml
+window_state.json
+
 # ── IDE ───────────────────────────────────────────
 .vscode/
 .idea/

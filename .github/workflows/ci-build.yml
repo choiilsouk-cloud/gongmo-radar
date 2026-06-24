@@ -1,4 +1,4 @@
-﻿name: CI / Build / Release
+name: CI / Build / Release
 
 on:
   push:
@@ -126,7 +126,7 @@ jobs:
           Write-Host "SHA256: $hash"
 
       - name: Create GitHub Release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           tag_name: ${{ steps.ver.outputs.tag }}
           name: "공모레이더 v${{ steps.ver.outputs.version }}"
